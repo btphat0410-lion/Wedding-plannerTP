@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wedding Planner</title>
+<meta name="theme-color" content="#FBF7F2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Wedding Planner">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--ivory:#FBF7F2;--cream:#F4EBDF;--blush:#F3D9DB;--rose:#B9707B;--roseD:#9C5762;--champ:#CDB28A;--ink:#3A2E2E;--mute:#85766F;--line:#EADFCF;--ok:#2F7D57;--warn:#D97706;--bad:#C0392B}
@@ -46,8 +52,11 @@ a em,.nl em{position:absolute;top:2px;left:55%;background:var(--bad);color:#fff;
 .row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}.row:first-child{border-top:0}
 .grow{flex:1;min-width:0}.right{text-align:right;display:grid;gap:3px;justify-items:end;font-size:15px}
 .link{background:none;border:0;padding:0;text-align:left;font-weight:500;display:block;min-height:24px}.link .sub{display:block;font-weight:400}.link.done{color:var(--mute);text-decoration:line-through}.link.sm{font-size:14px;color:var(--rose);font-weight:500}
-.chk{appearance:none;flex:none;width:24px;height:24px;border:2px solid var(--champ);border-radius:50%;background:#fff;cursor:pointer;display:grid;place-content:center;margin:0}
-.chk:checked{background:var(--rose);border-color:var(--rose)}.chk:checked::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.chk{appearance:none;flex:none;width:32px;height:32px;min-height:32px;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer;display:grid;place-content:center;margin:0}
+.chk::before{content:"";grid-area:1/1;width:18px;height:18px;border:1.7px solid var(--champ);border-radius:50%;background:#fff}
+.chk:checked::before{background:var(--rose);border-color:var(--rose)}
+.chk:checked::after{content:"";grid-area:1/1;z-index:1;width:5px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.task-note{display:block;font-size:12px;line-height:1.4;margin-top:3px;white-space:pre-line;overflow-wrap:anywhere}
 .tag{display:grid;text-align:right;font-size:13px;font-weight:500;color:var(--mute);white-space:nowrap}.tag small{font-weight:400;font-size:12px}.tag.late{color:var(--bad)}
 .chip{display:inline-block;font-size:12px;padding:1px 10px;border-radius:99px;background:var(--cream)}.chip.ok{background:#DCFCE7;color:#166534}.chip.dep{background:#FFEDD5;color:#9A3412}
 .mini{border:1px solid var(--rose);color:var(--rose);background:none;border-radius:99px;padding:2px 10px;font-size:12px}.mini:hover{background:var(--blush)}
@@ -100,6 +109,7 @@ let project = null;
 
 /* ===================== DỮ LIỆU & TIỆN ÍCH ===================== */
 const S = { tab: "home", uid: null, side: null, tasks: [], budget: [], incomes: [], guests: [], notifs: [], members: [], f: { ta: "", ts: "open", tt: "", gq: "", gs: "", gr: "", gi: "", al: "album" } };
+let installPrompt = null;
 const SIDE = { bride: "Cô dâu", groom: "Chú rể" }, GSIDE = { groom: "Nhà trai", bride: "Nhà gái" };
 const GRP = { family: "Gia đình", relative: "Họ hàng", friend: "Bạn bè", colleague: "Đồng nghiệp", other: "Khác" };
 const RSVP = { pending: "Chưa xác nhận", attending: "Sẽ tham dự", declined: "Không tham dự" };
@@ -126,8 +136,13 @@ const alerts = () => S.tasks.filter((t) => !t.done && t.due_date && daysUntil(t.
 /* ---- Lưu trữ cục bộ (localStorage), không cần tài khoản ---- */
 const KEY = "wp_db_v1";
 let DB = null;
+let applyingRemote = false;
 const uid = () => crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2);
-const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch { alert("Không lưu được dữ liệu: bộ nhớ trình duyệt bị đầy hoặc bị chặn. Hãy xuất file sao lưu ngay."); } };
+const persist = () => {
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); }
+  catch { alert("Không lưu được dữ liệu: bộ nhớ trình duyệt bị đầy hoặc bị chặn. Hãy xuất file sao lưu ngay."); }
+  if (!applyingRemote && DB) window.wpCloud?.onLocalChange?.(JSON.parse(JSON.stringify(DB)));
+};
 const pad = (n) => String(n).padStart(2, "0");
 const addDays = (iso, n) => { const [y, m, d] = iso.split("-").map(Number); const x = new Date(y, m - 1, d + n); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
 /* Lịch mẫu thông minh: nếu còn ít hơn 12 tháng, các mốc dài hạn được co lại theo thời gian còn lại và không bao giờ rơi vào quá khứ */
@@ -234,13 +249,19 @@ function pickPhotos(cam, cb) { const i = document.createElement("input"); i.type
   i.onchange = () => { const f = [...i.files]; if (f.length) cb(f); }; i.click(); }
 async function addPhotos(files, type, owner) {
   if (!idb) return toast("Trình duyệt này không hỗ trợ lưu ảnh.");
-  let n = 0; toast("Đang xử lý ảnh…");
+  let n = 0, cloudFailures = 0; toast("Đang xử lý ảnh…");
   for (const f of files.slice(0, 12)) {
     try { const img = await loadImg(f), full = await toJpeg(img, 1600, .8), thumb = await toJpeg(img, 240, .72);
-      await storePhoto(uid(), owner, type, f.name || "", new Date().toISOString(), thumb, full); n++; }
+      const meta = { id: uid(), owner, type, name: f.name || "", created_at: new Date().toISOString() };
+      await storePhoto(meta.id, owner, type, meta.name, meta.created_at, thumb, full); n++;
+      try { await window.wpCloud?.uploadPhoto?.(meta, thumb, full); }
+      catch (e) { cloudFailures++; console.error("Không đồng bộ được ảnh:", e); }
+    }
     catch { toast("Không đọc được ảnh " + (f.name || "")); }
   }
-  PH.hook?.(); render(); if (n) toast(`Đã thêm ${n} ảnh`);
+  PH.hook?.(); render();
+  if (cloudFailures) toast(`Đã lưu ${n} ảnh trên máy; ${cloudFailures} ảnh chưa đồng bộ lên cloud`);
+  else if (n) toast(`Đã thêm ${n} ảnh`);
 }
 const photoBlock = () => `<label>Hình ảnh đính kèm (hóa đơn, ảnh chuyển khoản…)</label><div class="strip" id="strip"></div>
   <div class="acts" style="position:static"><button type="button" class="ghost sm" id="p_cam">Chụp ảnh</button><button type="button" class="ghost sm" id="p_lib">Chọn từ thư viện</button></div>`;
@@ -264,7 +285,16 @@ async function openLightbox(list, id) {
     if (e.target === dlg || x === "close") return dlg.close();
     if (x === "prev") { i = (i - 1 + list.length) % list.length; draw(); }
     if (x === "next") { i = (i + 1) % list.length; draw(); }
-    if (x === "del" && confirm("Xóa ảnh này?")) { await deletePhotoRec(list[i].id); list.splice(i, 1); i = Math.min(i, list.length - 1); PH.hook?.(); render(); draw(); } };
+    if (x === "del" && confirm("Xóa ảnh này?")) {
+      try {
+        await window.wpCloud?.deletePhoto?.(list[i].id);
+        await deletePhotoRec(list[i].id);
+        list.splice(i, 1); i = Math.min(i, list.length - 1); PH.hook?.(); render(); draw();
+      } catch (error) {
+        console.error("Không xóa được ảnh đã đồng bộ:", error);
+        toast("Không xóa được ảnh trên cloud. Hãy thử lại khi có mạng.");
+      }
+    } };
   dlg.addEventListener("close", () => { if (url) URL.revokeObjectURL(url); dlg.remove(); });
   draw();
 }
@@ -350,7 +380,7 @@ const meter = (u) => `<div class="bar"><i class="${u > 1 ? "bad" : u >= .9 ? "wa
 const stat = (k, v, cls = "") => `<div><span class="sub">${k}</span><b class="${cls}">${v}</b></div>`;
 const taskRow = (t) => { const late = !t.done && t.due_date && daysUntil(t.due_date) < 0;
   return `<div class="row"><input class="chk" type="checkbox" data-c="toggle" data-id="${t.id}" ${t.done ? "checked" : ""} aria-label="Hoàn thành: ${esc(t.title)}">
-  <div class="grow"><button class="link ${t.done ? "done" : ""}" data-a="editTask" data-id="${t.id}">${esc(t.title)}<span class="sub">${t.assignee ? SIDE[t.assignee] : "Chưa phân công"}${t.priority === "high" ? ' · <span class="hi">Ưu tiên cao</span>' : ""}</span></button>${thumbsHTML(t.id)}</div>
+  <div class="grow"><button class="link ${t.done ? "done" : ""}" data-a="editTask" data-id="${t.id}">${esc(t.title)}<span class="sub">${t.assignee ? SIDE[t.assignee] : "Chưa phân công"}${t.priority === "high" ? ' · <span class="hi">Ưu tiên cao</span>' : ""}</span></button>${t.notes ? `<span class="task-note sub" title="${esc(t.notes)}">Ghi chú: ${esc(t.notes)}</span>` : ""}${thumbsHTML(t.id)}</div>
   ${t.due_date && !t.done ? `<span class="tag ${late ? "late" : ""}">${dueTxt(t.due_date)}<small>${fdate(t.due_date)}</small></span>` : t.due_date ? `<span class="tag">${fdate(t.due_date)}</span>` : ""}</div>`; };
 const empty = (m) => `<p class="empty">${m}</p>`;
 
@@ -473,6 +503,9 @@ V.notif = () => { const al = S.tasks.filter((t) => !t.done && t.due_date && days
 V.settings = () => `<h1>Cài đặt</h1><section class="card"><label>Tên cô dâu</label><input id="s_b" value="${esc(project.bride_name)}" maxlength="80"><label>Tên chú rể</label><input id="s_g" value="${esc(project.groom_name)}" maxlength="80">
   <label>Ngày cưới</label><input id="s_d" type="date" value="${project.wedding_date}"><label>Tổng ngân sách (VNĐ)</label><input id="s_t" type="number" min="0" step="1000000" inputmode="numeric" value="${project.total_budget}">
   <p class="err" id="s_e" role="alert"></p><button class="btn" data-a="saveProject">Lưu thay đổi</button></section>
+  ${window.wpCloudUI?.() || '<section class="card"><h3>Tài khoản & đồng bộ</h3><div class="note warn">Đăng nhập cloud dùng được khi mở website qua HTTPS.</div></section>'}
+  <section class="card"><h3>Dùng như ứng dụng</h3><p class="sub">Thêm Wedding Planner vào màn hình chính để mở toàn màn hình và ẩn thanh địa chỉ. Cần mở ứng dụng từ một địa chỉ HTTPS; mở trực tiếp file HTML sẽ không cài được.</p>
+  ${installPrompt ? '<button class="btn" data-a="installApp">Cài đặt ứng dụng</button>' : '<p class="sub">Android: mở menu ⋮ rồi chọn “Cài đặt ứng dụng” hoặc “Thêm vào màn hình chính”. iPhone: nhấn Chia sẻ rồi chọn “Thêm vào Màn hình chính”.</p>'}</section>
   <section class="card"><h3>Sao lưu dữ liệu</h3><p class="sub">Dữ liệu nằm trong trình duyệt của máy này. Xóa dữ liệu duyệt web hoặc đổi máy sẽ làm mất dữ liệu, nên hãy xuất file sao lưu thường xuyên.</p>
   <div class="acts"><button class="ghost" data-a="backup">Xuất file sao lưu</button><label class="ghost" style="margin:0;cursor:pointer;color:inherit">Khôi phục từ file<input type="file" accept=".json,application/json" data-c="restore" hidden></label></div>
   <div class="acts"><button class="ghost danger" data-a="resetAll">Xóa toàn bộ dữ liệu</button></div></section>`;
@@ -491,6 +524,15 @@ const acts = {
   setf: (_, el) => { S.f[el.dataset.k] = el.dataset.v; render(); },
   payFull: (id) => { const x = DB.budget_items.find((i) => i.id === id); x.paid_amount = cost(x); persist(); notify("budget", `đã thanh toán đủ khoản "${x.name}"`); toast("Đã ghi nhận thanh toán đủ"); },
   perm: async () => { await Notification.requestPermission(); render(); },
+  installApp: async () => {
+    if (!installPrompt) return toast("Hãy dùng menu trình duyệt để thêm ứng dụng vào màn hình chính.");
+    const prompt = installPrompt;
+    await prompt.prompt();
+    const choice = await prompt.userChoice;
+    installPrompt = null;
+    if (choice.outcome === "accepted") toast("Đã bắt đầu cài đặt ứng dụng");
+    render();
+  },
   backup: () => doBackup(),
   resetAll: () => { if (confirm("Xóa toàn bộ dữ liệu đám cưới trên máy này? Không thể hoàn tác.") && confirm("Bạn thật sự chắc chắn? Hãy xuất file sao lưu trước nếu cần.")) { localStorage.removeItem(KEY); clearPhotos(); DB = null; start(); } },
   saveProject: () => {
@@ -558,7 +600,8 @@ function screenOnboarding() {
     <div class="card"><label>Tên cô dâu</label><input id="b" maxlength="80"><label>Tên chú rể</label><input id="g" maxlength="80">
     <label>Ngày cưới</label><input id="d" type="date"><label>Tổng ngân sách dự kiến (VNĐ, có thể bỏ trống)</label><input id="t" type="number" min="0" step="1000000" inputmode="numeric">
     <p class="err" id="e" role="alert"></p><button class="btn" id="go">Bắt đầu lên kế hoạch</button>
-    <label class="ghost" style="display:block;text-align:center;margin-top:12px;cursor:pointer">Khôi phục từ file sao lưu<input type="file" accept=".json,application/json" id="rs" hidden></label></div></div>`);
+    <label class="ghost" style="display:block;text-align:center;margin-top:12px;cursor:pointer">Khôi phục từ file sao lưu<input type="file" accept=".json,application/json" id="rs" hidden></label></div>
+    <div id="cloudbox">${window.wpCloudUI?.() || '<section class="card"><h3>Tài khoản & đồng bộ</h3><p class="sub">Mở website qua HTTPS để đăng nhập và tham gia dự án dùng chung.</p></section>'}</div></div>`);
   const q = (s) => el.querySelector(s);
   q("#go").onclick = () => {
     if (!q("#b").value.trim() || !q("#g").value.trim()) return q("#e").textContent = "Hãy nhập tên cô dâu và chú rể.";
@@ -571,10 +614,61 @@ function screenOnboarding() {
   show(el);
 }
 function start() { try { DB = JSON.parse(localStorage.getItem(KEY)); } catch { DB = null; } DB ? sync() : screenOnboarding(); }
+window.wpApp = {
+  getData: () => DB ? JSON.parse(JSON.stringify(DB)) : null,
+  hasData: () => Boolean(DB),
+  currentTab: () => S.tab,
+  render,
+  backup: doBackup,
+  applyRemote(data) {
+    if (!data || !Array.isArray(data.tasks) || !Array.isArray(data.budget_items) || !data.project?.wedding_date) {
+      throw new Error("Dữ liệu đồng bộ không hợp lệ.");
+    }
+    DB = { incomes: [], notifications: [], deleted_keys: [], guests: [], ...data };
+    applyingRemote = true;
+    try { persist(); }
+    finally { applyingRemote = false; }
+    sync();
+  },
+  photos: () => [...PH.list],
+  async photoRecords() {
+    if (!idb) return [];
+    const records = [];
+    for (const meta of PH.list) {
+      const [thumb, full] = await Promise.all([
+        idbDo(["photos"], "readonly", (p) => p.get(meta.id)),
+        idbDo(["full"], "readonly", (p) => p.get(meta.id)),
+      ]);
+      if (thumb && full) records.push({ meta, thumb: thumb.thumb, full: full.blob });
+    }
+    return records;
+  },
+  async storeRemotePhoto(meta, thumb, full) {
+    if (!PH.list.some((p) => p.id === meta.id)) await storePhoto(meta.id, meta.owner, meta.type, meta.name || "", meta.created_at, thumb, full);
+    render();
+  },
+  removeLocalPhoto: deletePhotoRec,
+  clearLocalPhotos: clearPhotos,
+};
 window.addEventListener("storage", (e) => { if (e.key === KEY && DB) start(); });
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && DB && start());
 start();
-openIDB().then(async (d) => { idb = d; if (d) { try { await loadPhotos(); await cleanOrphans(); } catch {} if (DB) render(); } });
+window.wpPhotosReady = openIDB().then(async (d) => { idb = d; if (d) { try { await loadPhotos(); if (DB) await cleanOrphans(); } catch (error) { console.error("Không tải được ảnh cục bộ:", error); } if (DB) render(); } });
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  if (DB && S.tab === "settings") render();
+});
+window.addEventListener("appinstalled", () => { installPrompt = null; toast("Wedding Planner đã được cài đặt"); });
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+  navigator.serviceWorker.register("./sw.js").catch((error) => console.error("Không đăng ký được service worker:", error));
+}
+if (location.protocol !== "file:") {
+  const cloudScript = document.createElement("script");
+  cloudScript.type = "module";
+  cloudScript.src = "./cloud.js";
+  document.head.appendChild(cloudScript);
+}
 </script>
 </body>
 </html>
